@@ -518,6 +518,8 @@ static void *bionic_dlopen(const char *path, int flags)
     }
     if (!strcmp(base, "libvulkan.so") && !tl_vk_available()) { dl_fail("dlopen failed: library \"%s\" not found", path); return NULL; }
     if (tl_bionic_is_system_lib(base)) {
+        if (!strcmp(base, "libturnip.so"))
+            tl_log_line("dl: routing the APK Turnip proxy through MoltenVK");
         for (int i = 0; i < g_nsys; i++) if (!strcmp(g_sys_names[i], base)) return &g_sys_handle[i + 1];
         if (g_nsys < 15) { snprintf(g_sys_names[g_nsys], 48, "%s", base); g_nsys++; return &g_sys_handle[g_nsys]; }
         return &g_sys_handle[0];
@@ -703,6 +705,11 @@ void *tl_bionic_find(const char *name)
 
 bool tl_bionic_is_system_lib(const char *soname)
 {
+    /* Some APKs bundle an Android Adreno Vulkan proxy named libturnip.so, which opens a
+     * sibling libvulkan.purple.so from an on-disk APK library directory. APK libraries
+     * are loaded from the archive here, so that lookup cannot work. When the APK carries
+     * that proxy/driver pair and Husk has MoltenVK, use the host Vulkan bridge instead. */
+    if (!strcmp(soname, "libturnip.so") && tl_ld_has_lib("libvulkan.purple.so") && tl_vk_available()) return true;
     static const char *const sys[] = {
         "libc.so", "libm.so", "libdl.so", "liblog.so", "libandroid.so", "libEGL.so", "libGLESv1_CM.so",
         "libGLESv2.so", "libGLESv3.so", "libz.so", "libmediandk.so", "libOpenSLES.so", "libaaudio.so",
